@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ZaharkaTok</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:#fff; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+  #feed { height:100vh; width:100vw; overflow-y:scroll; scroll-snap-type:y mandatory; scrollbar-width:none; }
+  #feed::-webkit-scrollbar { display:none; }
+  .post { height:100vh; width:100%; scroll-snap-align:start; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .post video, .post img { width:100%; height:100%; object-fit:cover; }
+  .post video { background:#000; }
+  .post .bg-text { position:absolute; font-size:1.8rem; padding:2rem; text-align:center; word-break:break-word; line-height:1.3; }
+  .overlay { position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 35%); pointer-events:none; }
+  .info { position:absolute; bottom:80px; left:16px; right:80px; z-index:2; }
+  .info .author { font-weight:700; font-size:1.1rem; margin-bottom:8px; display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .info .author .avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#25f4ee,#fe2c55); display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:bold; overflow:hidden; }
+  .info .author .avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+  .info .author .p2p { font-size:0.65rem; opacity:0.6; margin-left:4px; }
+  .info .desc { font-size:0.95rem; line-height:1.35; opacity:0.95; }
+  .actions { position:absolute; right:12px; bottom:100px; z-index:2; display:flex; flex-direction:column; gap:20px; align-items:center; }
+  .action { display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; user-select:none; transition:transform 0.15s; }
+  .action:active { transform:scale(1.2); }
+  .action svg { width:34px; height:34px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+  .action .count { font-size:0.75rem; font-weight:600; }
+  .action.liked svg path { fill:#fe2c55; stroke:#fe2c55; }
+  .topbar { position:fixed; top:0; left:0; right:0; z-index:10; display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:linear-gradient(to bottom,rgba(0,0,0,0.6),transparent); pointer-events:none; }
+  .topbar .logo { font-size:1.2rem; font-weight:800; letter-spacing:-0.5px; pointer-events:auto; }
+  .topbar .logo span { color:#fe2c55; }
+  .topbar .right { display:flex; gap:8px; align-items:center; pointer-events:auto; flex-wrap:wrap; justify-content:flex-end; }
+  .topbar .user-badge { font-size:0.8rem; opacity:0.8; padding:6px 10px; background:rgba(255,255,255,0.1); border-radius:20px; cursor:pointer; }
+  .topbar .peers { font-size:0.75rem; padding:6px 10px; background:rgba(37,244,238,0.15); color:#25f4ee; border-radius:20px; }
+  .topbar .upload-indicator { font-size:0.75rem; padding:6px 10px; background:rgba(254,44,85,0.2); color:#fe2c55; border-radius:20px; cursor:pointer; display:none; }
+  .topbar .upload-indicator.active { display:inline-block; }
+  .topbar button { background:#fe2c55; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:600; font-size:0.85rem; cursor:pointer; }
+  .topbar button.gallery { background:#25f4ee; color:#000; }
+  .topbar button.profile { background:#8e44ad; }
+  .topbar button:active { opacity:0.8; }
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:100; display:none; align-items:center; justify-content:center; padding:16px; }
+  .modal-bg.active { display:flex; }
+  .modal { background:#1a1a1a; border-radius:16px; padding:24px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto; }
+  .modal h2 { font-size:1.2rem; margin-bottom:16px; }
+  .modal label { display:block; font-size:0.8rem; opacity:0.7; margin-bottom:6px; margin-top:14px; }
+  .modal textarea { width:100%; background:#2a2a2a; border:1px solid #333; border-radius:8px; padding:12px; color:#fff; font-size:0.95rem; font-family:inherit; outline:none; resize:vertical; min-height:70px; }
+  .modal textarea:focus { border-color:#fe2c55; }
+  .modal .file-label { display:block; background:#2a2a2a; border:1px dashed #444; border-radius:8px; padding:16px; text-align:center; cursor:pointer; font-size:0.9rem; }
+  .modal .file-label input { display:none; }
+  .modal .file-name { font-size:0.8rem; opacity:0.7; margin-top:6px; word-break:break-all; }
+  .modal .buttons { display:flex; gap:10px; margin-top:20px; }
+  .modal .buttons button { flex:1; padding:12px; border-radius:8px; border:none; font-weight:600; font-size:0.9rem; cursor:pointer; }
+  .modal .buttons .cancel { background:#2a2a2a; color:#fff; }
+  .modal .buttons .submit { background:#fe2c55; color:#fff; }
+  .modal .hint { font-size:0.75rem; opacity:0.5; margin-top:10px; line-height:1.4; }
+  .modal .opt { display:flex; align-items:center; gap:8px; margin-top:14px; padding:10px; background:#2a2a2a; border-radius:8px; }
+  .modal .opt input { width:20px; height:20px; }
+  .modal .opt label { margin:0; font-size:0.85rem; cursor:pointer; opacity:1; }
+  .empty { height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:24px; }
+  .empty h2 { font-size:1.4rem; }
+  .empty p { opacity:0.6; font-size:0.95rem; line-height:1.5; }
+  .empty .emoji { font-size:4rem; }
+  .comments-panel { position:fixed; bottom:0; left:0; right:0; background:#1a1a1a; border-radius:16px 16px 0 0; max-height:70vh; z-index:50; transform:translateY(100%); transition:transform 0.3s; display:flex; flex-direction:column; }
+  .comments-panel.active { transform:translateY(0); }
+  .comments-panel .head { padding:16px; border-bottom:1px solid #2a2a2a; display:flex; justify-content:space-between; align-items:center; }
+  .comments-panel .head h3 { font-size:1rem; }
+  .comments-panel .head button { background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; }
+  .comments-list { flex:1; overflow-y:auto; padding:12px 16px; max-height:50vh; }
+  .comment { padding:10px 0; border-bottom:1px solid #222; font-size:0.9rem; }
+  .comment .c-author { font-weight:600; color:#25f4ee; margin-bottom:2px; }
+  .comment-input { display:flex; gap:8px; padding:12px 16px; border-top:1px solid #2a2a2a; }
+  .comment-input input { flex:1; background:#2a2a2a; border:none; border-radius:20px; padding:10px 16px; color:#fff; outline:none; }
+  .comment-input button { background:#fe2c55; border:none; border-radius:20px; padding:10px 18px; color:#fff; font-weight:600; cursor:pointer; }
+  #loginScreen { position:fixed; inset:0; background:#000; z-index:200; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; }
+  #loginScreen.hidden { display:none; }
+  #loginScreen .logo-big { font-size:2.4rem; font-weight:800; margin-bottom:8px; }
+  #loginScreen .logo-big span { color:#fe2c55; }
+  #loginScreen p { opacity:0.6; margin-bottom:24px; text-align:center; max-width:340px; line-height:1.5; }
+  #loginScreen input { width:100%; max-width:320px; background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:14px; color:#fff; font-size:1rem; outline:none; margin-bottom:12px; text-align:center; }
+  #loginScreen input:focus { border-color:#fe2c55; }
+  #loginScreen button { width:100%; max-width:320px; background:#fe2c55; border:none; border-radius:8px; padding:14px; color:#fff; font-size:1rem; font-weight:600; cursor:pointer; }
+  #loginScreen .status { font-size:0.8rem; color:#25f4ee; margin-top:16px; min-height:20px; text-align:center; }
+  .toast { position:fixed; top:70px; left:50%; transform:translateX(-50%); background:#fe2c55; color:#fff; padding:10px 20px; border-radius:8px; font-size:0.9rem; z-index:300; opacity:0; transition:opacity 0.3s; pointer-events:none; max-width:90%; text-align:center; }
+  .toast.show { opacity:1; }
+  .toast.ok { background:#27ae60; }
+  .toast.warn { background:#e67e22; }
+  .dl-status { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); border-radius:20px; padding:6px 14px; font-size:0.75rem; color:#25f4ee; z-index:5; display:none; pointer-events:none; }
+  .dl-status.active { display:block; }
+  #profileScreen { position:fixed; inset:0; background:#000; z-index:150; display:none; flex-direction:column; overflow-y:auto; padding-bottom:40px; }
+  #profileScreen.active { display:flex; }
+  .prof-header { padding:60px 16px 20px; background:linear-gradient(180deg,rgba(254,44,85,0.15),transparent); text-align:center; }
+  .prof-avatar { width:96px; height:96px; border-radius:50%; background:linear-gradient(135deg,#25f4ee,#fe2c55); display:flex; align-items:center; justify-content:center; font-size:2.5rem; font-weight:800; margin:0 auto 12px; border:3px solid #fff; overflow:hidden; }
+  .prof-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+  .prof-nick { font-size:1.3rem; font-weight:700; margin-bottom:4px; }
+  .prof-tag { font-size:0.8rem; opacity:0.6; margin-bottom:16px; }
+  .prof-stats { display:flex; justify-content:center; gap:32px; margin-bottom:16px; }
+  .prof-stat { text-align:center; }
+  .prof-stat b { font-size:1.2rem; display:block; }
+  .prof-stat span { font-size:0.75rem; opacity:0.6; }
+  .prof-actions { display:flex; justify-content:center; gap:8px; }
+  .prof-actions button { padding:10px 24px; border-radius:8px; border:none; font-weight:700; font-size:0.9rem; cursor:pointer; }
+  .prof-actions .back { background:#2a2a2a; color:#fff; }
+  .prof-actions .post { background:#fe2c55; color:#fff; }
+  .prof-tabs { display:flex; border-bottom:1px solid #222; margin-top:8px; }
+  .prof-tab { flex:1; padding:14px; text-align:center; font-size:0.9rem; font-weight:600; color:#888; cursor:pointer; border-bottom:2px solid transparent; }
+  .prof-tab.active { color:#fff; border-bottom-color:#fe2c55; }
+  .prof-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:2px; padding:2px; }
+  .prof-cell { aspect-ratio:9/16; background:#1a1a1a; position:relative; overflow:hidden; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .prof-cell img, .prof-cell video { width:100%; height:100%; object-fit:cover; }
+  .prof-cell .cell-text { padding:8px; font-size:0.75rem; text-align:center; opacity:0.8; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+  .prof-cell .cell-icon { position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:4px; font-size:0.65rem; }
+  .prof-cell .cell-likes { position:absolute; bottom:6px; left:6px; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:4px; font-size:0.7rem; font-weight:600; }
+  .prof-empty { padding:60px 20px; text-align:center; opacity:0.5; grid-column:1/-1; }
+  .prof-back-btn { position:fixed; top:14px; left:14px; width:44px; height:44px; border-radius:50%; background:rgba(0,0,0,0.6); border:none; color:#fff; font-size:24px; cursor:pointer; z-index:160; display:flex; align-items:center; justify-content:center; }
+  :root { color-scheme: dark; --zt-pink: #ff3d70; --zt-cyan: #54f4e8; --zt-line: rgba(255,255,255,.11); }
+  html, body { background:#080910; background-image:radial-gradient(ellipse at 18% 8%, rgba(255,61,112,.13), transparent 34%), radial-gradient(ellipse at 85% 85%, rgba(84,244,232,.09), transparent 32%); letter-spacing:.01em; }
+  button, input, textarea { font:inherit; }
+  button { transition:transform .18s ease, filter .18s ease, background .18s ease; }
+  button:hover { filter:brightness(1.1); }
+  button:active { transform:scale(.97); }
+  .topbar { padding:15px clamp(14px,3vw,34px); gap:18px; background:linear-gradient(180deg,rgba(5,6,12,.88),rgba(5,6,12,.28)); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-bottom:1px solid rgba(255,255,255,.055); }
+  .topbar .logo { display:flex; align-items:center; gap:9px; font-size:1.28rem; letter-spacing:-.8px; white-space:nowrap; }
+  .topbar .logo span { background:linear-gradient(100deg,var(--zt-pink),#ff8b67); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .brand-tag { font-size:.55rem; letter-spacing:1.5px; font-weight:700; color:rgba(255,255,255,.42); border-left:1px solid var(--zt-line); padding-left:9px; margin-left:1px; }
+  .feed-search { pointer-events:auto; width:min(34vw,390px); min-width:150px; color:#fff; background:rgba(255,255,255,.075); border:1px solid rgba(255,255,255,.1); border-radius:999px; padding:10px 15px; outline:none; font-size:.83rem; box-shadow:inset 0 1px 0 rgba(255,255,255,.04); transition:border-color .2s, background .2s, box-shadow .2s; }
+  .feed-search:focus { border-color:rgba(84,244,232,.65); background:rgba(255,255,255,.11); box-shadow:0 0 0 3px rgba(84,244,232,.09); }
+  .topbar .right { gap:9px; }
+  .topbar .user-badge, .topbar .peers, .topbar .upload-indicator { border:1px solid rgba(255,255,255,.09); backdrop-filter:blur(12px); padding:8px 12px; }
+  .topbar .peers { background:rgba(84,244,232,.10); color:var(--zt-cyan); }
+  .topbar button { min-width:40px; min-height:38px; border-radius:12px; box-shadow:0 5px 18px rgba(255,61,112,.16); }
+  .topbar button.gallery { box-shadow:0 5px 18px rgba(84,244,232,.12); }
+  #feed { overscroll-behavior-y:contain; scroll-behavior:smooth; }
+  .post { background:#080910; }
+  .post video, .post img { filter:saturate(1.04); }
+  .post::after { content:""; position:absolute; inset:0; pointer-events:none; box-shadow:inset 0 0 0 1px rgba(255,255,255,.035); }
+  .overlay { background:linear-gradient(0deg,rgba(3,4,10,.88) 0%,rgba(3,4,10,.35) 22%,transparent 48%), linear-gradient(180deg,rgba(3,4,10,.28),transparent 20%); }
+  .info { bottom:clamp(86px,10vh,112px); left:clamp(18px,4vw,42px); }
+  .info .author { gap:9px; text-shadow:0 2px 12px #000; }
+  .info .author .avatar { width:38px; height:38px; border:1.5px solid rgba(255,255,255,.8); box-shadow:0 4px 18px rgba(0,0,0,.3); }
+  .info .desc { max-width:min(620px,82vw); font-size:1rem; line-height:1.5; text-shadow:0 2px 10px rgba(0,0,0,.8); }
+  .actions { right:clamp(14px,3vw,30px); bottom:clamp(104px,12vh,140px); gap:22px; }
+  .action { min-width:48px; padding:7px 5px; border-radius:18px; transition:background .18s,transform .18s; }
+  .action:hover { background:rgba(255,255,255,.1); }
+  .action svg { width:38px; height:38px; }
+  .action .count { text-shadow:0 2px 8px #000; }
+  .action.liked svg { filter:drop-shadow(0 0 10px rgba(255,61,112,.65)); }
+  .empty { background:linear-gradient(145deg,rgba(255,61,112,.08),rgba(84,244,232,.04)); }
+  .empty .emoji { filter:drop-shadow(0 8px 24px rgba(255,61,112,.2)); }
+  .modal-bg { backdrop-filter:blur(12px); }
+  .modal { background:linear-gradient(145deg,#1b1d2a,#11131c); border:1px solid rgba(255,255,255,.1); box-shadow:0 24px 90px rgba(0,0,0,.55); border-radius:22px; padding:26px; }
+  .modal h2 { font-size:1.35rem; letter-spacing:-.4px; }
+  .modal textarea, .modal .file-label, .modal .opt { background:rgba(255,255,255,.055); border-color:rgba(255,255,255,.12); border-radius:12px; transition:border-color .2s,background .2s; }
+  .modal textarea:focus { border-color:var(--zt-pink); background:rgba(255,255,255,.08); }
+  .modal .file-label:hover { border-color:var(--zt-cyan); background:rgba(84,244,232,.07); }
+  .modal .buttons button { border-radius:12px; min-height:44px; }
+  .modal .buttons .submit, #loginScreen button { background:linear-gradient(110deg,#ff356b,#ff675f); box-shadow:0 8px 24px rgba(255,53,107,.22); }
+  .comments-panel { background:linear-gradient(180deg,#1b1d2a,#11131b); border:1px solid rgba(255,255,255,.09); border-bottom:0; box-shadow:0 -18px 70px rgba(0,0,0,.45); border-radius:22px 22px 0 0; }
+  .comments-panel .head { border-color:var(--zt-line); }
+  .comment { border-color:rgba(255,255,255,.07); line-height:1.45; }
+  .comment .c-author { color:var(--zt-cyan); }
+  .comment-input { border-color:var(--zt-line); }
+  .comment-input input { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.07); }
+  .comment-input button { background:linear-gradient(110deg,#ff356b,#ff675f); }
+  #loginScreen { background:radial-gradient(ellipse at 50% 25%,rgba(255,61,112,.19),transparent 40%), radial-gradient(ellipse at 12% 88%,rgba(84,244,232,.12),transparent 34%), #080910; }
+  #loginScreen .logo-big { font-size:clamp(2.5rem,8vw,3.4rem); letter-spacing:-2px; text-shadow:0 8px 34px rgba(255,61,112,.17); }
+  #loginScreen .logo-big span { background:linear-gradient(100deg,var(--zt-pink),#ff9870); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #loginScreen p { max-width:360px; }
+  #loginScreen input { max-width:360px; border-radius:14px; padding:16px; background:rgba(255,255,255,.07); border-color:rgba(255,255,255,.12); }
+  #loginScreen input:focus { border-color:var(--zt-cyan); }
+  #loginScreen button { max-width:360px; border-radius:14px; padding:15px; }
+  #profileScreen { background:radial-gradient(ellipse at 50% 0,rgba(255,61,112,.14),transparent 36%),#080910; }
+  .prof-header { padding-top:76px; }
+  .prof-avatar { box-shadow:0 10px 35px rgba(255,61,112,.2); border:2px solid rgba(255,255,255,.85); }
+  .prof-tabs { border-color:var(--zt-line); }
+  .prof-tab.active { border-bottom-color:var(--zt-pink); }
+  .prof-cell { border-radius:5px; }
+  .prof-back-btn { top:16px; left:16px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.12); backdrop-filter:blur(12px); }
+  .toast { border:1px solid rgba(255,255,255,.15); border-radius:999px; box-shadow:0 10px 35px rgba(0,0,0,.35); backdrop-filter:blur(12px); }
+  @media (min-width: 900px) {
+    .post video, .post img { object-fit:contain; }
+    .post { background:radial-gradient(ellipse at center,#171925,#05060b 72%); }
+    .info { left:max(5vw,calc((100vw - 1100px)/2)); }
+    .actions { right:max(3vw,calc((100vw - 1200px)/2)); }
+  }
+  @media (max-width: 680px) {
+    .topbar { padding:10px 11px; gap:7px; flex-wrap:wrap; }
+    .topbar .logo { font-size:1.1rem; }
+    .brand-tag { display:none; }
+    .feed-search { order:3; width:100%; min-width:0; padding:8px 13px; }
+    .topbar .right { gap:6px; }
+    .topbar .right button { padding:7px 10px; min-width:34px; min-height:34px; }
+    .topbar .user-badge { display:none; }
+    .info { bottom:82px; left:14px; right:70px; }
+    .info .desc { font-size:.9rem; }
+    .actions { right:7px; bottom:92px; gap:15px; }
+    .action svg { width:32px; height:32px; }
+    .modal { padding:21px; border-radius:18px; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; transition-duration:.01ms !important; } }
+  .bottom-nav { position:fixed; z-index:45; left:0; right:0; bottom:0; min-height:68px; padding:7px max(10px, env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); display:flex; align-items:center; justify-content:space-around; gap:4px; background:rgba(8,9,16,.91); border-top:1px solid rgba(255,255,255,.10); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); }
+  .nav-item { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:0; background:transparent; color:rgba(255,255,255,.58); font-size:.66rem; font-weight:600; padding:3px 2px; cursor:pointer; }
+  .nav-item .nav-ico { font-size:1.55rem; line-height:1.15; font-weight:400; }
+  .nav-item.active { color:#fff; }
+  .nav-item.active .nav-ico { color:var(--zt-cyan); filter:drop-shadow(0 0 8px rgba(84,244,232,.32)); }
+  .nav-create { flex:0 0 48px; height:34px; border:0; border-radius:11px; color:white; cursor:pointer; background:linear-gradient(100deg,#ff356b 0 43%,#fff 43% 57%,#25d9d3 57%); box-shadow:0 5px 20px rgba(255,53,107,.25); display:grid; place-items:center; }
+  .nav-create span { font-size:1.7rem; line-height:1; font-weight:500; text-shadow:0 1px 4px #000; }
+  #feed { padding-bottom:0; }
+  .post video, .post img { object-fit:contain !important; object-position:center center; background:#000; }
+  .info { bottom:calc(88px + env(safe-area-inset-bottom)); }
+  .actions { bottom:calc(102px + env(safe-area-inset-bottom)); }
+  #profileScreen { padding-bottom:calc(90px + env(safe-area-inset-bottom)); }
+  .prof-back-btn { z-index:161; }
+  @media (max-width:680px) {
+    .topbar { padding-top:9px; }
+    .topbar .right button.gallery, .topbar .right button.profile { display:none; }
+    .topbar .right > button:not(.gallery):not(.profile) { display:none; }
+    .info { bottom:calc(84px + env(safe-area-inset-bottom)); }
+    .actions { bottom:calc(96px + env(safe-area-inset-bottom)); }
+  }
+  @media (min-width:681px) {
+    .bottom-nav { left:50%; right:auto; transform:translateX(-50%); width:min(520px,90vw); border:1px solid rgba(255,255,255,.1); border-bottom:0; border-radius:18px 18px 0 0; }
+    .info { bottom:110px; }
+    .actions { bottom:125px; }
+  }
+  .post video { display:block; background:#000; }
+  .post video::-webkit-media-controls { display:none !important; }
+  .post { isolation:isolate; }
+  .post video, .post img { -webkit-user-drag:none; }
+  html, body { overscroll-behavior:none; }
+  #feed { height:100dvh; max-height:100dvh; overflow-y:auto; scroll-snap-type:none; overscroll-behavior-y:contain; scroll-behavior:auto; touch-action:none; }
+  .post { height:100dvh; min-height:100dvh; max-height:100dvh; scroll-snap-align:none; flex:0 0 100dvh; }
+  .creator-bg,.profile-edit-bg{align-items:flex-end;padding:0;background:rgba(0,0,0,.8)}
+  .creator-sheet,.profile-edit-sheet{width:min(100%,560px);max-width:560px;max-height:94dvh;overflow-y:auto;padding:20px 18px calc(18px + env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:linear-gradient(155deg,#202230,#101119);border:1px solid #ffffff18}
+  .creator-top{display:flex;align-items:center;gap:13px;margin-bottom:18px}.creator-top h2{margin:2px 0 0;font-size:1.25rem}
+  .creator-kicker{color:var(--zt-cyan);font-size:.62rem;font-weight:800;letter-spacing:1.5px}
+  .creator-close{width:38px;height:38px;border:0;border-radius:50%;background:#ffffff14;color:white;font-size:1.5rem}
+  .creator-preview{min-height:175px;border:1px dashed #ffffff44;border-radius:18px;background:linear-gradient(135deg,#ff3d701c,#54f4e81a);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:7px;overflow:hidden}
+  .creator-preview-icon{width:46px;height:46px;border-radius:14px;background:#ffffff18;display:grid;place-items:center;font-size:1.8rem}
+  .creator-preview span{color:#a5a7b4;font-size:.76rem}.creator-pick{margin-top:7px;background:white;color:#111;border-radius:9px;padding:9px 17px;font-size:.8rem;font-weight:800}
+  .creator-preview img,.creator-preview video{width:100%;height:225px;object-fit:contain;background:#000}
+  .creator-fileline{display:flex;justify-content:space-between;gap:8px;margin:12px 2px 17px}.creator-fileline>span:first-child{font-size:.62rem;color:#999;letter-spacing:1px}
+  .creator-fileline .file-name{font-size:.7rem;text-align:right;color:#ddd}
+  .creator-label{display:block!important;font-size:.8rem!important;font-weight:700;margin:12px 0 8px!important;opacity:1!important}
+  .creator-sheet textarea{min-height:88px;border-radius:14px;background:#ffffff0c;border:1px solid #ffffff20}
+  .creator-footer{display:flex;gap:10px;margin-top:18px}.creator-footer button{flex:1;min-height:48px;border:0;border-radius:13px;font-size:.83rem;font-weight:800}
+  .creator-cancel{background:#ffffff16;color:white}.creator-submit{background:linear-gradient(100deg,#ff3d70,#ff245a);color:white}
+  .creator-note{margin-top:12px;color:#9294a0;font-size:.68rem;line-height:1.45;text-align:center}
+  .edit-avatar-wrap{display:flex;align-items:center;flex-direction:column;gap:10px;margin:8px 0 22px}
+  .edit-avatar{width:100px;height:100px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#54f4e8,#ff3d70);font-size:2rem;font-weight:900;overflow:hidden;border:3px solid white}
+  .edit-avatar img{width:100%;height:100%;object-fit:cover}.avatar-change{color:var(--zt-cyan);font-size:.8rem;font-weight:700}
+  .profile-edit-input{width:100%;padding:14px;border-radius:12px;border:1px solid #ffffff24;background:#ffffff0c;color:white}
+  #profileScreen { width:100vw; max-width:100vw; height:100dvh; max-height:100dvh; inset:0; overflow:hidden; overflow-x:hidden; box-sizing:border-box; padding:0 0 calc(68px + env(safe-area-inset-bottom)); background:#090a0f; }
+  #profileScreen * { box-sizing:border-box; }
+  .prof-back-btn { top:calc(10px + env(safe-area-inset-top)); left:12px; width:38px;height:38px;background:#ffffff17; }
+  .prof-header { flex:0 0 auto; width:100%; padding:calc(54px + env(safe-area-inset-top)) 14px 12px; background:radial-gradient(ellipse at 50% 0%,rgba(255,48,99,.17),transparent 70%); }
+  .prof-avatar { width:76px;height:76px;margin:0 auto 8px;font-size:2rem; }
+  .prof-nick { font-size:1.08rem; margin-bottom:2px; }
+  .prof-tag { font-size:.72rem; margin-bottom:10px; color:#a5a7b3; }
+  .prof-stats { gap:38px; margin-bottom:11px; }
+  .prof-stat b { font-size:1.05rem; }
+  .prof-stat span { font-size:.68rem; color:#a5a7b3; }
+  .prof-actions { gap:8px; flex-wrap:wrap; }
+  .prof-actions button { padding:8px 14px!important; min-height:34px; border-radius:8px!important; font-size:.75rem!important; line-height:1.1; max-width:170px; }
+  .prof-tabs { flex:0 0 auto; margin-top:4px; height:39px; }
+  .prof-tab { padding:10px 8px; font-size:.78rem; }
+  .prof-grid { flex:1 1 auto; min-height:0; width:100%; overflow-y:auto; overflow-x:hidden; grid-template-columns:repeat(3,minmax(0,1fr)); gap:2px; padding:2px; align-content:start; overscroll-behavior:contain; }
+  .prof-cell { min-width:0; aspect-ratio:3/4; }
+  #profileScreen { overflow-x:hidden!important; touch-action:pan-y; }
+  .prof-header { padding-bottom:8px!important; display:flex; flex-direction:column; align-items:center; }
+  .prof-avatar { order:0; } .prof-nick { order:1; } .prof-tag { order:2; margin-bottom:0!important; } .prof-actions { order:3; } .prof-stats { order:4; }
+  .prof-actions { margin:3px 0 0!important; min-height:0!important; }
+  .prof-actions button { min-height:27px!important; padding:5px 11px!important; font-size:.68rem!important; border-radius:7px!important; }
+  .prof-actions .post { display:none!important; }
+  .prof-stats { margin-top:10px!important; }
+  .prof-grid { overflow-y:auto!important; overflow-x:hidden!important; }
+  .post video { touch-action: manipulation; }
+  .post video { cursor:pointer; }
+  .post .video-pause-indicator { position:absolute; z-index:8; left:50%; top:50%; transform:translate(-50%,-50%); width:64px;height:64px;border-radius:50%;display:grid;place-items:center; background:rgba(0,0,0,.48);color:#fff;font-size:27px;pointer-events:none; opacity:0;transition:opacity .18s;backdrop-filter:blur(5px); }
+  .post .video-pause-indicator.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="logo-big">Zaharka<span>Tok</span></div>
+  <p>Соцсеть на своём сервере. Посты, лайки, комменты — всё хранится на бэкенде.</p>
+  <input id="loginInput" placeholder="Твоё имя" maxlength="20">
+  <button onclick="doLogin()">Войти</button>
+  <div class="status" id="loginStatus">Введи имя и заходи</div>
+</div>
+
+<div class="topbar">
+  <div class="logo">Zaharka<span>Tok</span><small class="brand-tag">SERVER</small></div>
+  <input id="feedSearch" class="feed-search" type="search" placeholder="⌕  Поиск по постам и авторам" aria-label="Поиск">
+  <div class="right">
+    <span class="upload-indicator" id="uploadIndicator">📤 <span id="uploadCount">0</span></span>
+    <span class="peers" id="peersBadge">🌐 offline</span>
+    <span class="user-badge" id="userBadge" onclick="openProfile(MY_ID)">@</span>
+    <button class="gallery" onclick="pickFromGallery()">📷</button>
+    <button class="profile" onclick="openProfile(MY_ID)">👤</button>
+    <button onclick="openModal()">+</button>
+  </div>
+</div>
+
+<div id="feed"></div>
+
+<nav class="bottom-nav" id="bottomNav" aria-label="Навигация">
+  <button class="nav-item active" id="navHome" onclick="navigateTab('home')"><span class="nav-ico">⌂</span><span>Видео</span></button>
+  <button class="nav-item" id="navSearch" onclick="navigateTab('search')"><span class="nav-ico">⌕</span><span>Поиск</span></button>
+  <button class="nav-create" onclick="openModal()"><span>＋</span></button>
+  <button class="nav-item" id="navActivity" onclick="navigateTab('home')"><span class="nav-ico">↗</span><span>Активность</span></button>
+  <button class="nav-item" id="navProfile" onclick="navigateTab('profile')"><span class="nav-ico">◎</span><span>Профиль</span></button>
+</nav>
+
+<div id="profileScreen">
+  <button class="prof-back-btn" onclick="closeProfile()">←</button>
+  <div class="prof-header">
+    <div class="prof-avatar" id="profAvatar">?</div>
+    <div class="prof-nick" id="profNick">—</div>
+    <div class="prof-tag" id="profTag">@—</div>
+    <div class="prof-stats">
+      <div class="prof-stat"><b id="profCount">0</b><span>постов</span></div>
+      <div class="prof-stat"><b id="profLikes">0</b><span>лайков</span></div>
+    </div>
+    <div class="prof-actions" id="profActions"></div>
+  </div>
+  <div class="prof-tabs"><div class="prof-tab active">📹 Посты</div></div>
+  <div class="prof-grid" id="profGrid"></div>
+</div>
+
+<input type="file" id="galleryInput" accept="image/*,video/*" style="display:none">
+
+<div class="modal-bg creator-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+ <div class="modal creator-sheet">
+  <div class="creator-top"><button class="creator-close" onclick="closeModal()">×</button><div><span class="creator-kicker">ZAHARKATOK STUDIO</span><h2>Создать публикацию</h2></div></div>
+  <div class="creator-preview" id="creatorPreview"><div class="creator-preview-icon">＋</div><b>Добавь видео или фото</b><span>Выбери файл</span><label class="creator-pick" for="postFile">Выбрать файл</label></div>
+  <input type="file" id="postFile" accept="video/*,image/*" hidden>
+  <div class="creator-fileline"><span>МЕДИАФАЙЛ</span><span class="file-name" id="fileName">Ничего не выбрано</span></div>
+  <label class="creator-label" for="postText">Подпись</label>
+  <textarea id="postText" placeholder="Напиши описание…"></textarea>
+  <div class="creator-footer"><button class="creator-cancel" onclick="closeModal()">Отмена</button><button class="creator-submit" onclick="createPost()">Опубликовать　↑</button></div>
+  <div class="creator-note">Файл загружается на сервер, все увидят его сразу.</div>
+ </div>
+</div>
+
+<div class="modal-bg profile-edit-bg" id="profileEditBg" onclick="if(event.target===this)closeProfileEditor()">
+ <div class="modal profile-edit-sheet">
+  <div class="creator-top"><button class="creator-close" onclick="closeProfileEditor()">×</button><div><span class="creator-kicker">ТВОЯ СТРАНИЦА</span><h2>Редактировать профиль</h2></div></div>
+  <div class="edit-avatar-wrap"><div class="edit-avatar" id="editAvatarPreview">?</div><label for="avatarFile" class="avatar-change">Изменить аватарку</label><input type="file" id="avatarFile" accept="image/*" hidden></div>
+  <label class="creator-label" for="editNick">Никнейм</label><input class="profile-edit-input" id="editNick" maxlength="20" placeholder="Твой ник">
+  <p class="creator-note">Изменения сохраняются на сервере.</p>
+  <div class="creator-footer"><button class="creator-cancel" onclick="closeProfileEditor()">Отмена</button><button class="creator-submit" onclick="saveProfileEditor()">Сохранить</button></div>
+ </div>
+</div>
+
+<div class="comments-panel" id="commentsPanel">
+  <div class="head"><h3>Комментарии</h3><button onclick="closeComments()">×</button></div>
+  <div class="comments-list" id="commentsList"></div>
+  <div class="comment-input">
+    <input id="commentInput" placeholder="Написать коммент..." onkeydown="if(event.key==='Enter')sendComment()">
+    <button onclick="sendComment()">➤</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN_KEY = 'zt_token';
+const USER_ID_KEY = 'zt_userid';
+const NICK_KEY = 'zt_nick';
+const AVATAR_KEY = 'zt_avatar';
+
+let TOKEN = localStorage.getItem(TOKEN_KEY) || '';
+let MY_ID = localStorage.getItem(USER_ID_KEY) || '';
+let ME = localStorage.getItem(NICK_KEY) || '';
+let MY_AVATAR = localStorage.getItem(AVATAR_KEY) || '';
+
+let posts = [];
+let comments = {};
+let socket = null;
+let currentCommentPostId = null;
+let currentProfileId = null;
+let audioUnlocked = false;
+let pendingAvatarData = null;
+let uploadingCount = 0;
+
+const ICONS = {
+  heart: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+  comment: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+async function api(path, opts = {}) {
+  const headers = opts.headers || {};
+  if (TOKEN) headers['x-token'] = TOKEN;
+  if (opts.json !== undefined) {
+    headers['content-type'] = 'application/json';
+    opts.body = JSON.stringify(opts.json);
+    delete opts.json;
+  }
+  const res = await fetch(path, { ...opts, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || ('http_' + res.status));
+  }
+  return res.json();
+}
+
+async function doLogin() {
+  const v = document.getElementById('loginInput').value.trim();
+  if (!v) return toast('Введи имя');
+  try {
+    const data = await api('/api/login', { method: 'POST', json: { nick: v } });
+    TOKEN = data.token;
+    MY_ID = data.userId;
+    ME = data.nick;
+    MY_AVATAR = data.avatar || '';
+    localStorage.setItem(TOKEN_KEY, TOKEN);
+    localStorage.setItem(USER_ID_KEY, MY_ID);
+    localStorage.setItem(NICK_KEY, ME);
+    if (MY_AVATAR) localStorage.setItem(AVATAR_KEY, MY_AVATAR);
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('userBadge').textContent = '@' + ME;
+    await initFeed();
+  } catch (e) {
+    toast('Не удалось войти: ' + e.message, 'warn');
+  }
+}
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  try { socket = new WebSocket(proto + '://' + location.host + '/ws?token=' + encodeURIComponent(TOKEN)); }
+  catch (e) { setTimeout(connectWS, 3000); return; }
+  socket.onopen = () => { document.getElementById('peersBadge').textContent = '🌐 online'; };
+  socket.onmessage = (ev) => {
+    let data;
+    try { data = JSON.parse(ev.data); } catch { return; }
+    handleWsEvent(data);
+  };
+  socket.onclose = () => {
+    document.getElementById('peersBadge').textContent = '🌐 offline';
+    setTimeout(() => { if (TOKEN) connectWS(); }, 2000);
+  };
+  socket.onerror = () => {};
+}
+
+function handleWsEvent(data) {
+  if (data.type === 'hello') return;
+  if (data.type === 'post') {
+    if (!posts.find(p => p.id === data.post.id)) {
+      posts.unshift(data.post);
+      render();
+      if (currentProfileId) renderProfile(currentProfileId);
+      if (data.post.authorId !== MY_ID) toast('@' + data.post.author + ' запостил', 'ok');
+    }
+    return;
+  }
+  if (data.type === 'like') {
+    const p = posts.find(x => x.id === data.postId);
+    if (p) {
+      p.likeCount = data.likeCount;
+      if (data.userId === MY_ID) p.isLiked = data.on;
+      render();
+      if (currentProfileId) renderProfile(currentProfileId);
+    }
+    return;
+  }
+  if (data.type === 'comment') {
+    if (!comments[data.postId]) comments[data.postId] = [];
+    if (!comments[data.postId].find(c => c.id === data.comment.id)) {
+      comments[data.postId].push(data.comment);
+      const p = posts.find(x => x.id === data.postId);
+      if (p) p.commentCount = comments[data.postId].length;
+      if (currentCommentPostId === data.postId) renderComments();
+      render();
+    }
+    return;
+  }
+  if (data.type === 'delete') {
+    posts = posts.filter(p => p.id !== data.postId);
+    delete comments[data.postId];
+    render();
+    if (currentProfileId) renderProfile(currentProfileId);
+    return;
+  }
+  if (data.type === 'profile') {
+    for (const p of posts) if (p.authorId === data.userId) p.author = data.nick;
+    for (const pid in comments) for (const c of comments[pid]) if (c.authorId === data.userId) c.author = data.nick;
+    if (data.userId === MY_ID) { ME = data.nick; localStorage.setItem(NICK_KEY, ME); document.getElementById('userBadge').textContent = '@' + ME; }
+    render();
+    if (currentProfileId) renderProfile(currentProfileId);
+    return;
+  }
+}
+
+async function initFeed() {
+  const status = document.getElementById('loginStatus');
+  status.textContent = 'Загружаю ленту...';
+  try {
+    posts = await api('/api/posts');
+  } catch (e) {
+    status.textContent = 'Ошибка: ' + e.message;
+    return;
+  }
+  render();
+  connectWS();
+  status.textContent = 'Готово';
+}
+
+function render() {
+  const feed = document.getElementById('feed');
+  const previousPage = Math.round((feed.scrollTop || 0) / Math.max(1, feed.clientHeight || window.innerHeight));
+  if (posts.length === 0) {
+    feed.innerHTML = '<div class="empty"><div class="emoji">📭</div><h2>Пока пусто</h2><p>Нажми «＋» — опубликуй первый пост.</p></div>';
+    return;
+  }
+  const query = (document.getElementById('feedSearch')?.value || '').trim().toLocaleLowerCase('ru');
+  const sorted = posts.filter(p => !query ||
+    String(p.text || '').toLocaleLowerCase('ru').includes(query) ||
+    String(p.author || '').toLocaleLowerCase('ru').includes(query)
+  );
+  if (sorted.length === 0) {
+    feed.innerHTML = '<div class="empty"><div class="emoji">🔎</div><h2>Ничего не найдено</h2></div>';
+    return;
+  }
+  feed.innerHTML = sorted.map(p => {
+    let mediaHtml;
+    if (p.type === 'video' && p.mediaUrl) mediaHtml = '<video src="' + p.mediaUrl + '" loop playsinline muted preload="metadata"></video>';
+    else if (p.type === 'image' && p.mediaUrl) mediaHtml = '<img src="' + p.mediaUrl + '" alt="">';
+    else if (p.type === 'text') mediaHtml = '<div class="bg-text">' + escapeHtml(p.text) + '</div>';
+    else mediaHtml = '<div class="bg-text">[медиа нет]</div>';
+
+    const av = p.authorId === MY_ID && MY_AVATAR
+      ? '<img src="' + MY_AVATAR + '" alt="">'
+      : escapeHtml((p.author[0] || '?').toUpperCase());
+
+    return '<div class="post" data-id="' + p.id + '">' +
+      mediaHtml +
+      (p.type === 'video' ? '<div class="video-pause-indicator" aria-hidden="true">Ⅱ</div>' : '') +
+      '<div class="overlay"></div>' +
+      '<div class="info">' +
+        '<div class="author" onclick="openProfile(\'' + p.authorId + '\')">' +
+          '<div class="avatar">' + av + '</div>' +
+          '<span>@' + escapeHtml(p.author) + '</span>' +
+          '<span class="p2p">' + (p.authorId === MY_ID ? '(ты)' : '') + '</span>' +
+        '</div>' +
+        (p.type === 'text' ? '' : '<div class="desc">' + escapeHtml(p.text) + '</div>') +
+      '</div>' +
+      '<div class="actions">' +
+        '<div class="action ' + (p.isLiked ? 'liked' : '') + '" onclick="toggleLike(\'' + p.id + '\')">' +
+          ICONS.heart + '<span class="count">' + (p.likeCount || '') + '</span>' +
+        '</div>' +
+        '<div class="action" onclick="openComments(\'' + p.id + '\')">' +
+          ICONS.comment + '<span class="count">' + (p.commentCount || '') + '</span>' +
+        '</div>' +
+        '<div class="action" onclick="sharePost(\'' + p.id + '\')">' + ICONS.share + '</div>' +
+        (p.authorId === MY_ID ? '<div class="action" onclick="deletePost(\'' + p.id + '\')">' + ICONS.trash + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+  feed.scrollTop = previousPage * feed.clientHeight;
+  observeFeedVideos();
+  wireVideoGestures();
+}
+
+// ==================== VIDEO PLAYBACK ====================
+let feedVideoObserver = null;
+let activeFeedVideo = null;
+
+function syncFeedVideoPlayback() {
+  const videos = [...document.querySelectorAll('#feed .post video')];
+  if (!videos.length) { activeFeedVideo = null; return; }
+  let candidate = null, bestRatio = 0;
+  videos.forEach(video => {
+    const post = video.closest('.post');
+    if (!post) return;
+    const rect = post.getBoundingClientRect();
+    const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+    const ratio = visibleHeight / Math.max(1, rect.height);
+    if (ratio > bestRatio) { bestRatio = ratio; candidate = video; }
+  });
+  if (bestRatio < 0.55) candidate = null;
+  videos.forEach(video => {
+    if (video !== candidate) {
+      video.pause(); video.muted = true;
+      if (video === activeFeedVideo) activeFeedVideo = null;
+    }
+  });
+  if (candidate) {
+    if (activeFeedVideo !== candidate) candidate.dataset.userPaused = 'false';
+    activeFeedVideo = candidate;
+    candidate.playsInline = true;
+    candidate.loop = true;
+    candidate.muted = !audioUnlocked;
+    candidate.volume = 1;
+    if (candidate.paused && candidate.dataset.userPaused !== 'true') candidate.play().catch(() => {
+      candidate.muted = true; candidate.play().catch(() => {});
+    });
+  }
+}
+function observeFeedVideos() {
+  if (feedVideoObserver) feedVideoObserver.disconnect();
+  const items = document.querySelectorAll('#feed .post');
+  if ('IntersectionObserver' in window) {
+    feedVideoObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting || entry.intersectionRatio < 0.55) {
+          const video = entry.target.querySelector('video');
+          if (video) { video.pause(); video.muted = true; }
+        }
+      });
+      syncFeedVideoPlayback();
+    }, { root: document.getElementById('feed'), threshold: [0, 0.25, 0.55, 0.75, 1] });
+    items.forEach(post => feedVideoObserver.observe(post));
+  }
+  syncFeedVideoPlayback();
+}
+function unlockAudio() {
+  audioUnlocked = true;
+  syncFeedVideoPlayback();
+}
+document.addEventListener('touchstart', function unlockOnFirstTouch() {
+  unlockAudio();
+  document.removeEventListener('touchstart', unlockOnFirstTouch);
+}, { passive: true });
+document.addEventListener('click', function unlockOnFirstClick() {
+  unlockAudio();
+  document.removeEventListener('click', unlockOnFirstClick);
+}, { passive: true });
+
+function wireVideoGestures() {
+  document.querySelectorAll('#feed .post video').forEach(video => {
+    if (video.dataset.wired === '1') return;
+    video.dataset.wired = '1';
+    let holdTimer = null, fastForwarding = false, suppressClick = false;
+    const indicator = () => video.closest('.post')?.querySelector('.video-pause-indicator');
+    const show = (symbol) => {
+      const el = indicator(); if (!el) return;
+      el.textContent = symbol; el.classList.add('show');
+      clearTimeout(el._hideTimer);
+      if (symbol !== 'Ⅱ') el._hideTimer = setTimeout(() => el.classList.remove('show'), 650);
+    };
+    video.addEventListener('pointerdown', e => {
+      if (e.button !== undefined && e.button !== 0) return;
+      const rect = video.getBoundingClientRect();
+      if (e.clientX < rect.left + rect.width * .72) return;
+      holdTimer = setTimeout(() => {
+        fastForwarding = true; suppressClick = true;
+        video.playbackRate = 2; show('2×');
+      }, 220);
+    });
+    const release = () => {
+      clearTimeout(holdTimer); holdTimer = null;
+      if (fastForwarding) {
+        fastForwarding = false; video.playbackRate = 1;
+        const el = indicator(); if (el) el.classList.remove('show');
+      }
+    };
+    video.addEventListener('pointerup', release);
+    video.addEventListener('pointercancel', release);
+    video.addEventListener('pointerleave', release);
+    video.addEventListener('click', e => {
+      e.stopPropagation();
+      if (suppressClick) { suppressClick = false; return; }
+      if (video.paused) {
+        video.dataset.userPaused = 'false';
+        video.play().then(() => show('▶')).catch(()=>{});
+      } else {
+        video.dataset.userPaused = 'true';
+        video.pause(); show('Ⅱ');
+      }
+    });
+  });
+}
+
+// ==================== ACTIONS ====================
+async function toggleLike(id) {
+  try {
+    const r = await api('/api/posts/' + id + '/like', { method: 'POST' });
+    const p = posts.find(x => x.id === id);
+    if (p) { p.likeCount = r.likeCount; p.isLiked = r.isLiked; }
+    render();
+    if (currentProfileId) renderProfile(currentProfileId);
+  } catch (e) { toast('Ошибка лайка', 'warn'); }
+}
+
+async function deletePost(id) {
+  if (!confirm('Удалить пост?')) return;
+  try {
+    await api('/api/posts/' + id, { method: 'DELETE' });
+  } catch (e) { toast('Ошибка: ' + e.message, 'warn'); }
+}
+
+async function openComments(id) {
+  currentCommentPostId = id;
+  document.getElementById('commentsPanel').classList.add('active');
+  try { comments[id] = await api('/api/posts/' + id + '/comments'); }
+  catch (e) { comments[id] = []; }
+  renderComments();
+}
+function closeComments() {
+  document.getElementById('commentsPanel').classList.remove('active');
+  currentCommentPostId = null;
+}
+function renderComments() {
+  const list = document.getElementById('commentsList');
+  const arr = (comments[currentCommentPostId] || []).slice().sort((a,b) => a.time - b.time);
+  if (!arr.length) { list.innerHTML = '<div style="opacity:.5;text-align:center;padding:20px">Комментов пока нет</div>'; return; }
+  list.innerHTML = arr.map(c => '<div class="comment"><div class="c-author">@' + escapeHtml(c.author) + '</div><div>' + escapeHtml(c.text) + '</div></div>').join('');
+  list.scrollTop = list.scrollHeight;
+}
+async function sendComment() {
+  const input = document.getElementById('commentInput');
+  const text = input.value.trim();
+  if (!text || !currentCommentPostId) return;
+  try {
+    const c = await api('/api/posts/' + currentCommentPostId + '/comments', { method: 'POST', json: { text } });
+    if (!comments[currentCommentPostId]) comments[currentCommentPostId] = [];
+    if (!comments[currentCommentPostId].find(x => x.id === c.id)) comments[currentCommentPostId].push(c);
+    input.value = '';
+    renderComments();
+  } catch (e) { toast('Ошибка: ' + e.message, 'warn'); }
+}
+
+// ==================== CREATE POST ====================
+function openModal() { document.getElementById('modalBg').classList.add('active'); }
+function closeModal() {
+  document.getElementById('modalBg').classList.remove('active');
+  document.getElementById('postText').value = '';
+  document.getElementById('postFile').value = '';
+  document.getElementById('fileName').textContent = 'Ничего не выбрано';
+  document.getElementById('creatorPreview').innerHTML = '<div class="creator-preview-icon">＋</div><b>Добавь видео или фото</b><span>Выбери файл</span><label class="creator-pick" for="postFile">Выбрать файл</label>';
+}
+document.getElementById('postFile').addEventListener('change', e => {
+  const f = e.target.files[0];
+  document.getElementById('fileName').textContent = f ? (f.name + ' — ' + (f.size/1024/1024).toFixed(2) + ' МБ') : 'Ничего не выбрано';
+  const preview = document.getElementById('creatorPreview');
+  if (!f) {
+    preview.innerHTML = '<div class="creator-preview-icon">＋</div><b>Добавь видео или фото</b><span>Выбери файл</span><label class="creator-pick" for="postFile">Выбрать файл</label>';
+    return;
+  }
+  const u = URL.createObjectURL(f);
+  preview.innerHTML = f.type.startsWith('video/')
+    ? '<video src="' + u + '" controls muted playsinline></video>'
+    : '<img src="' + u + '" alt="Предпросмотр">';
+});
+
+async function createPost() {
+  const text = document.getElementById('postText').value.trim();
+  const file = document.getElementById('postFile').files[0];
+  if (!text && !file) return toast('Хоть что-то добавь');
+
+  const btn = document.querySelector('.creator-submit');
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Публикую...';
+
+  try {
+    if (file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('text', text);
+      const res = await fetch('/api/posts/media', {
+        method: 'POST',
+        headers: { 'x-token': TOKEN },
+        body: fd
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || ('http_' + res.status));
+      }
+    } else {
+      await api('/api/posts', { method: 'POST', json: { text } });
+    }
+    closeModal();
+    toast('Опубликовано', 'ok');
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'warn');
+  } finally {
+    btn.disabled = false; btn.textContent = old;
+  }
+}
+
+function pickFromGallery() {
+  if (!TOKEN) return toast('Сначала войди', 'warn');
+  document.getElementById('galleryInput').click();
+}
+document.getElementById('galleryInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('text', file.name || '');
+    const res = await fetch('/api/posts/media', {
+      method: 'POST',
+      headers: { 'x-token': TOKEN },
+      body: fd
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || ('http_' + res.status));
+    }
+    document.getElementById('feed').scrollTop = 0;
+    toast('Опубликовано', 'ok');
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'warn');
+  }
+});
+
+// ==================== PROFILE ====================
+async function openProfile(userId) {
+  if (!userId) return;
+  currentProfileId = userId;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  if (userId === MY_ID) document.getElementById('navProfile')?.classList.add('active');
+  document.getElementById('profileScreen').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  try {
+    const data = await api('/api/users/' + userId);
+    renderProfileFromData(data, userId);
+  } catch (e) { toast('Не удалось загрузить профиль', 'warn'); }
+}
+function closeProfile() {
+  currentProfileId = null;
+  document.getElementById('navHome')?.classList.add('active');
+  document.getElementById('navProfile')?.classList.remove('active');
+  document.getElementById('profileScreen').classList.remove('active');
+  document.body.style.overflow = '';
+}
+async function renderProfile(userId) {
+  if (!currentProfileId) return;
+  try {
+    const data = await api('/api/users/' + userId);
+    renderProfileFromData(data, userId);
+  } catch (e) {}
+}
+function renderProfileFromData(data, userId) {
+  const isMe = userId === MY_ID;
+  const avatarEl = document.getElementById('profAvatar');
+  if (data.avatar) avatarEl.innerHTML = '<img src="' + data.avatar + '" alt="Аватар">';
+  else avatarEl.textContent = (data.nick || '?')[0].toUpperCase();
+  document.getElementById('profNick').textContent = data.nick;
+  document.getElementById('profTag').textContent = '@' + data.nick + (isMe ? ' (ты)' : '');
+  document.getElementById('profCount').textContent = data.postCount;
+  document.getElementById('profLikes').textContent = data.totalLikes;
+
+  const actionsEl = document.getElementById('profActions');
+  actionsEl.innerHTML = '';
+  if (isMe) {
+    const edit = document.createElement('button');
+    edit.className = 'back'; edit.textContent = 'Изменить профиль';
+    edit.onclick = openProfileEditor;
+    actionsEl.appendChild(edit);
+  } else {
+    const btn = document.createElement('button');
+    btn.className = 'back'; btn.textContent = '← В ленту';
+    btn.onclick = closeProfile;
+    actionsEl.appendChild(btn);
+  }
+
+  const gridEl = document.getElementById('profGrid');
+  gridEl.innerHTML = '';
+  if (!data.posts.length) {
+    gridEl.innerHTML = '<div class="prof-empty">' + (isMe ? 'У тебя ещё нет постов' : 'Пока нет постов') + '</div>';
+    return;
+  }
+  for (const p of data.posts) {
+    const cell = document.createElement('div');
+    cell.className = 'prof-cell';
+    if (p.mediaUrl && p.type === 'video') {
+      const v = document.createElement('video');
+      v.src = p.mediaUrl; v.muted = true; v.playsInline = true; v.preload = 'metadata'; v.loop = true;
+      v.addEventListener('mouseenter', () => v.play().catch(()=>{}));
+      v.addEventListener('mouseleave', () => v.pause());
+      cell.appendChild(v);
+    } else if (p.mediaUrl) {
+      const img = document.createElement('img');
+      img.src = p.mediaUrl; img.loading = 'lazy';
+      cell.appendChild(img);
+    } else {
+      cell.innerHTML = '<div class="cell-text">' + escapeHtml(p.text) + '</div>';
+    }
+    const icon = document.createElement('div');
+    icon.className = 'cell-icon';
+    icon.textContent = p.type === 'video' ? '▶' : (p.type === 'image' ? '🖼' : '📝');
+    cell.appendChild(icon);
+    if (p.likeCount > 0) {
+      const l = document.createElement('div');
+      l.className = 'cell-likes'; l.textContent = '❤ ' + p.likeCount;
+      cell.appendChild(l);
+    }
+    cell.onclick = () => { closeProfile(); setTimeout(() => scrollToPost(p.id), 100); };
+    gridEl.appendChild(cell);
+  }
+}
+function scrollToPost(postId) {
+  const el = document.querySelector('.post[data-id="' + postId + '"]');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ==================== PROFILE EDIT ====================
+function openProfileEditor(){
+  document.getElementById('editNick').value = ME || '';
+  const preview = document.getElementById('editAvatarPreview');
+  if (MY_AVATAR) preview.innerHTML = '<img src="' + MY_AVATAR + '" alt="Аватар">';
+  else preview.textContent = (ME[0] || '?').toUpperCase();
+  pendingAvatarData = null;
+  document.getElementById('profileEditBg').classList.add('active');
+}
+function closeProfileEditor(){ document.getElementById('profileEditBg').classList.remove('active'); }
+
+document.getElementById('avatarFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) return toast('Выбери изображение', 'warn');
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      const scale = Math.min(1, 480 / Math.max(img.width, img.height));
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      pendingAvatarData = c.toDataURL('image/jpeg', .82);
+      document.getElementById('editAvatarPreview').innerHTML = '<img src="' + pendingAvatarData + '" alt="Аватар">';
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+async function saveProfileEditor(){
+  const nick = document.getElementById('editNick').value.trim();
+  if (nick.length < 2) return toast('Ник должен быть не короче 2 символов', 'warn');
+  try {
+    const body = { nick };
+    if (pendingAvatarData !== null) body.avatar = pendingAvatarData;
+    const r = await api('/api/me', { method: 'PATCH', json: body });
+    ME = r.nick;
+    MY_AVATAR = r.avatar || '';
+    localStorage.setItem(NICK_KEY, ME);
+    if (MY_AVATAR) localStorage.setItem(AVATAR_KEY, MY_AVATAR);
+    document.getElementById('userBadge').textContent = '@' + ME;
+    pendingAvatarData = null;
+    closeProfileEditor();
+    render();
+    if (currentProfileId === MY_ID) renderProfile(MY_ID);
+    toast('Профиль обновлён', 'ok');
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'warn');
+  }
+}
+
+// ==================== UTIL ====================
+function sharePost(id) {
+  const post = posts.find(p => p.id === id);
+  if (!post) return;
+  const text = '@' + post.author + ' в ZaharkaTok: ' + post.text;
+  if (navigator.share) navigator.share({ title: 'ZaharkaTok', text }).catch(()=>{});
+  else navigator.clipboard.writeText(text).then(() => toast('Скопировано', 'ok')).catch(() => toast(text));
+}
+function navigateTab(tab) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  if (tab === 'home') {
+    document.getElementById('navHome')?.classList.add('active');
+    if (currentProfileId) closeProfile();
+    document.getElementById('feed')?.scrollTo({ top: 0, behavior: 'smooth' });
+  } else if (tab === 'search') {
+    document.getElementById('navSearch')?.classList.add('active');
+    if (currentProfileId) closeProfile();
+    document.getElementById('feedSearch')?.focus();
+  } else if (tab === 'profile') {
+    document.getElementById('navProfile')?.classList.add('active');
+    openProfile(MY_ID);
+  }
+}
+
+document.getElementById('feedSearch')?.addEventListener('input', () => render());
+
+// ==================== FEED SCROLLING ====================
+const feedScroller = document.getElementById('feed');
+let feedTouchStartY = 0;
+let feedTouchStartX = 0;
+let feedTouchActive = false;
+let feedPageLocked = false;
+let feedWheelAccum = 0;
+let feedWheelTimer = null;
+
+function feedPosts() { return [...document.querySelectorAll('#feed > .post')]; }
+function goToFeedPage(index) {
+  const items = feedPosts();
+  if (!items.length) return;
+  const safeIndex = Math.max(0, Math.min(items.length - 1, index));
+  feedPageLocked = true;
+  feedScroller.scrollTo({ top: safeIndex * feedScroller.clientHeight, behavior: 'smooth' });
+  window.setTimeout(() => { feedPageLocked = false; syncFeedVideoPlayback(); }, 420);
+}
+function currentFeedPage() {
+  const height = feedScroller?.clientHeight || window.innerHeight;
+  return Math.round((feedScroller?.scrollTop || 0) / Math.max(1, height));
+}
+feedScroller?.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) return;
+  feedTouchStartY = e.touches[0].clientY;
+  feedTouchStartX = e.touches[0].clientX;
+  feedTouchActive = true;
+}, { passive: true });
+feedScroller?.addEventListener('touchmove', e => {
+  if (!feedTouchActive || e.touches.length !== 1) return;
+  const dy = e.touches[0].clientY - feedTouchStartY;
+  const dx = e.touches[0].clientX - feedTouchStartX;
+  if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) e.preventDefault();
+}, { passive: false });
+feedScroller?.addEventListener('touchend', e => {
+  if (!feedTouchActive) return;
+  feedTouchActive = false;
+  const touch = e.changedTouches[0];
+  const dy = touch.clientY - feedTouchStartY;
+  const dx = touch.clientX - feedTouchStartX;
+  if (Math.abs(dy) > 42 && Math.abs(dy) > Math.abs(dx) * 1.15) {
+    goToFeedPage(currentFeedPage() + (dy < 0 ? 1 : -1));
+  }
+}, { passive: true });
+feedScroller?.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (feedPageLocked) return;
+  feedWheelAccum += e.deltaY;
+  if (feedWheelTimer) clearTimeout(feedWheelTimer);
+  feedWheelTimer = setTimeout(() => {
+    if (Math.abs(feedWheelAccum) > 24) goToFeedPage(currentFeedPage() + (feedWheelAccum > 0 ? 1 : -1));
+    feedWheelAccum = 0;
+  }, 70);
+}, { passive: false });
+feedScroller?.addEventListener('scroll', () => {
+  if (!feedPageLocked) syncFeedVideoPlayback();
+}, { passive: true });
+window.addEventListener('resize', () => {
+  if (!feedScroller) return;
+  const page = currentFeedPage();
+  feedScroller.scrollTop = page * feedScroller.clientHeight;
+});
+
+// ==================== BOOT ====================
+(async () => {
+  if (TOKEN && ME) {
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('userBadge').textContent = '@' + ME;
+    try { await initFeed(); } catch (e) { toast('Ошибка старта: ' + e.message, 'warn'); }
+  }
+})();
+</script>
+</body>
+</html>
